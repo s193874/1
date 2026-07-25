@@ -1,0 +1,10 @@
+{
+  "app/src/main/java/com/playtranslate/OneShotManager.kt": "eabd76496984ea8f7f5b7266523b931551e55b3fd2e44190b9410fe6203b9146",
+  "app/src/main/java/com/playtranslate/CaptureService.kt": "2dfb25a95a056e9cf56e5e9e6b94c5f6731da74f199f19adbd26915a992a467f",
+  "app/src/main/java/com/playtranslate/OverlayUiController.kt": "8c03141742fcebe4301779c75f39cf2a1a902b7f0d65824970b8ae13d0d0d6b3",
+  "app/src/main/java/com/playtranslate/OneShotProcessor.kt": "f29753a4748d278e10f0eaa1523169a8cdb7c78d5e19d36d6bfe7b584fe0b3d9",
+  "app/src/main/java/com/playtranslate/ui/FloatingIconMenu.kt": "9f1c1361f7fedfcaf88b3e11e3e60b56163c146d7de63beacd14b4344b5eb476",
+  "app/src/main/java/com/playtranslate/ui/FloatingOverlayIcon.kt": "94ffe97091a4d98fd49e998fbf3697f64279b8c5f4c5bfaeea44831beedd85fe",
+  "app/src/main/java/com/playtranslate/ui/TextBox.kt": "2a1fec240a8179ef467e32002a091b8038e7b9d217c533173e39854d83302834",
+  "app/src/main/java/com/playtranslate/ui/TranslationOverlayView.kt": "c82f4cc4b99c815fbed5d4d1dd2b1132ed103bd57d13edf59da393cb58e646d0"
+}

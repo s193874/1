@@ -1,0 +1,808 @@
+package com.playtranslate.ui
+
+import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.RectF
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.view.Gravity
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewConfiguration
+import android.view.ViewGroup
+import android.view.animation.DecelerateInterpolator
+import android.widget.Button
+import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
+import com.playtranslate.R
+import com.playtranslate.RegionEntry
+import com.playtranslate.themeColor
+import androidx.core.view.isGone
+import androidx.core.view.isVisible
+import androidx.core.graphics.toColorInt
+
+/** Reason the floating-icon menu's warning pill is shown. None hides the
+ *  pill; the other two pick the corresponding label string. Set by the
+ *  accessibility service from CaptureService's (degraded, displaced)
+ *  state at menu build time. */
+enum class DegradedWarningKind { None, Offline, LowMemory }
+
+/**
+ * Full-screen overlay that dims the screen and shows a small popup menu
+ * next to the floating icon. Tapping outside the menu dismisses it.
+ * When the hide button is tapped, shows a confirmation dialog.
+ *
+ * Also supports drag-to-select: dragging outside the menu draws a selection
+ * rectangle and fires [onRegionSelected] with fractional coordinates.
+ */
+class FloatingIconMenu(context: Context) : FrameLayout(context) {
+
+    private val dp = resources.displayMetrics.density
+    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+
+    // Theme colors resolved from the user's selected palette
+    private val accentColor: Int = context.themeColor(R.attr.ptAccent).takeIf { it != 0 } ?: "#4DD0C2".toColorInt()
+    private val onAccentColor: Int = context.themeColor(R.attr.ptAccentOn).takeIf { it != 0 } ?: Color.BLACK
+    private val cardColor: Int = context.themeColor(R.attr.ptCard).takeIf { it != 0 } ?: "#1C1F22".toColorInt()
+    private val textColor: Int = context.themeColor(R.attr.ptText).takeIf { it != 0 } ?: "#ECEFF1".toColorInt()
+    private val mutedColor: Int = context.themeColor(R.attr.ptTextMuted).takeIf { it != 0 } ?: "#9AA1A8".toColorInt()
+    private val bgColor: Int = context.themeColor(R.attr.ptBg).takeIf { it != 0 } ?: "#0B0D0E".toColorInt()
+    private val dangerColor: Int = context.themeColor(R.attr.ptDanger).takeIf { it != 0 } ?: "#E05D5D".toColorInt()
+
+    var onHideIcon: (() -> Unit)? = null
+    var onHideTemporary: (() -> Unit)? = null
+    var onCloseRequested: (() -> Unit)? = null
+    var onDismiss: (() -> Unit)? = null
+    var onRegionSelected: ((RegionEntry) -> Unit)? = null
+    var onClearRegion: (() -> Unit)? = null
+    var onToggleLive: (() -> Unit)? = null
+    var onScreenshotTranslate: (() -> Unit)? = null
+    var onBilingualTranslate: (() -> Unit)? = null
+    var onCaptureRegion: (() -> Unit)? = null
+    var onSettings: (() -> Unit)? = null
+    var onIconStyle: (() -> Unit)? = null
+    var isSingleScreen: Boolean = false
+
+    /** True in MediaProjection mode or single-screen — the hide control then
+     *  reads "Turn Off" and confirms turning PlayTranslate off. Set by
+     *  showFloatingMenu. */
+    var exitFlow: Boolean = false
+        set(value) {
+            field = value
+            hideLabel.text = context.getString(
+                if (value) R.string.floating_icon_close_label_turn_off
+                else R.string.floating_icon_close_label_hide
+            )
+            hideIcon.setImageResource(
+                if (value) R.drawable.ic_mode_off_on else R.drawable.ic_exit_to_app
+            )
+        }
+
+    /** Current active capture region as fractional coordinates (top, bottom, left, right).
+     *  null or (0,1,0,1) means full screen — no region highlight shown. */
+    var activeRegion: RegionEntry? = null
+        set(value) {
+            field = value
+            // The drag-hint pill and the region preview are mutually exclusive.
+            instructionPill.visibility =
+                if (value != null && !value.isFullScreen) View.GONE else View.VISIBLE
+        }
+    /** Label for the hint-text overlay mode ("Furigana", "Pinyin", etc.), or null for translation mode. */
+    var hintModeLabel: String? = null
+        set(value) { field = value; updateLiveButton() }
+    var isLiveMode: Boolean = false
+        set(value) {
+            field = value
+            updateLiveButton()
+        }
+
+    /** Kind of warning to show on the bottom-center pill.
+     *  [DegradedWarningKind.None] hides the pill;
+     *  [DegradedWarningKind.Offline] / [DegradedWarningKind.LowMemory] show
+     *  it with the appropriate label. Set by the accessibility service at
+     *  menu build time based on the current
+     *  [com.playtranslate.CaptureService] state. */
+    var degradedWarningKind: DegradedWarningKind = DegradedWarningKind.None
+        set(value) {
+            field = value
+            when (value) {
+                DegradedWarningKind.None ->
+                    degradedWarningView?.visibility = View.GONE
+                DegradedWarningKind.Offline -> {
+                    degradedWarningLabel?.setText(R.string.degraded_warning_offline)
+                    degradedWarningView?.visibility = View.VISIBLE
+                }
+                DegradedWarningKind.LowMemory -> {
+                    degradedWarningLabel?.setText(R.string.degraded_warning_low_memory)
+                    degradedWarningView?.visibility = View.VISIBLE
+                }
+            }
+        }
+
+    private val dimPaint = Paint().apply {
+        color = Color.argb(170, 0, 0, 0)
+    }
+    private val clearPaint = Paint().apply {
+        xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
+    }
+    private val selectionBasePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = context.themeColor(R.attr.ptDivider)
+        strokeWidth = 2f * dp
+    }
+    private val selectionDashPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = accentColor
+        strokeWidth = 2f * dp
+        strokeCap = Paint.Cap.ROUND
+    }
+    private val selDashLen = 8f
+    private val selGapLen = 6f
+
+    private val regionStrokePaint = Paint().apply {
+        style = Paint.Style.STROKE
+        color = Color.argb(200, Color.red(accentColor), Color.green(accentColor), Color.blue(accentColor))
+        strokeWidth = 2f * dp
+        isAntiAlias = true
+    }
+    private val regionFillPaint = Paint().apply {
+        color = Color.argb(60, Color.red(accentColor), Color.green(accentColor), Color.blue(accentColor))
+        style = Paint.Style.FILL
+    }
+    private val regionLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textSize = 12f * dp
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.DEFAULT_BOLD
+        setShadowLayer(4f * dp, 0f, 0f, Color.BLACK)
+    }
+
+    // Scratch RectF reused in onDraw — allocating per frame is lint DrawAllocation.
+    private val regionRect = RectF()
+
+    private var clearRegionButton: View? = null
+    private var degradedWarningView: View? = null
+    /** TextView inside [degradedWarningView] holding the pill's label.
+     *  Stored so [degradedWarningKind]'s setter can rewrite it on-the-fly
+     *  instead of teardown/rebuild. Set during inflation. */
+    private var degradedWarningLabel: TextView? = null
+
+    private val menuCard: LinearLayout
+    private val settingsBtn: View
+    private val iconStyleBtn: View
+    private val instructionPill: LinearLayout
+    private val appName: String = context.getString(R.string.app_name)
+
+    private val liveIcon: TextView
+    private val liveLabel: TextView
+    private val liveBtn: FrameLayout
+    private val hideIcon: ImageView
+    private val hideLabel: TextView
+
+    private data class QuickActionViews(
+        val group: LinearLayout,
+        val button: FrameLayout,
+        val icon: TextView,
+        val label: TextView,
+    )
+
+    // ── Drag state ────────────────────────────────────────────────────────
+    private var isDragging = false
+    private var dragStartX = 0f
+    private var dragStartY = 0f
+    private var selectionRect: RectF? = null
+    private var potentialDrag = false
+
+    init {
+        setWillNotDraw(false)
+        setLayerType(LAYER_TYPE_HARDWARE, null)
+        clipChildren = false
+        clipToPadding = false
+
+        val btnSize = (54 * dp).toInt()
+        val iconPad = (14 * dp).toInt()
+
+        // Rounded rectangle container for both buttons
+        val borderColor = context.themeColor(R.attr.ptDivider)
+        menuCard = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            background = GradientDrawable().apply {
+                setColor(Color.argb(0xD9, Color.red(bgColor), Color.green(bgColor), Color.blue(bgColor)))
+                cornerRadius = 20 * dp
+                setStroke((1 * dp).toInt(), borderColor)
+            }
+            elevation = 8 * dp
+            clipChildren = false
+            clipToPadding = false
+            gravity = Gravity.CENTER_HORIZONTAL
+            val hPad = (14 * dp).toInt()
+            setPadding(hPad, (14 * dp).toInt(), hPad, (12 * dp).toInt())
+            visibility = View.INVISIBLE
+        }
+
+        fun makeQuickAction(
+            labelRes: Int,
+            glyph: String,
+            click: () -> Unit,
+        ): QuickActionViews {
+            val group = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    marginStart = (5 * dp).toInt()
+                    marginEnd = (5 * dp).toInt()
+                }
+            }
+            val button = FrameLayout(context).apply {
+                background = GradientDrawable().apply {
+                    setColor(accentColor)
+                    cornerRadius = 14 * dp
+                }
+                elevation = 4 * dp
+                layoutParams = LinearLayout.LayoutParams(btnSize, btnSize)
+                setOnClickListener { click() }
+            }
+            val icon = TextView(context).apply {
+                text = glyph
+                setTextColor(onAccentColor)
+                textSize = 24f
+                gravity = Gravity.CENTER
+                setTypeface(null, Typeface.BOLD)
+            }
+            val label = TextView(context).apply {
+                setText(labelRes)
+                setTextColor(textColor)
+                textSize = 9f
+                gravity = Gravity.CENTER
+                setTypeface(null, Typeface.BOLD)
+                maxWidth = (72 * dp).toInt()
+                maxLines = 2
+                layoutParams = LinearLayout.LayoutParams(
+                    (72 * dp).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).apply { topMargin = (5 * dp).toInt() }
+            }
+            button.addView(icon, LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ))
+            group.addView(button)
+            group.addView(label)
+            return QuickActionViews(group, button, icon, label)
+        }
+
+        val quickRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = (12 * dp).toInt() }
+        }
+
+        val screenshotAction = makeQuickAction(
+            R.string.quick_action_screenshot, "▣"
+        ) { onScreenshotTranslate?.invoke() }
+        val liveAction = makeQuickAction(
+            R.string.quick_action_live, "▶"
+        ) { onToggleLive?.invoke() }
+        val bilingualAction = makeQuickAction(
+            R.string.quick_action_bilingual, "注"
+        ) { onBilingualTranslate?.invoke() }
+
+        liveBtn = liveAction.button
+        liveIcon = liveAction.icon
+        liveLabel = liveAction.label
+        quickRow.addView(screenshotAction.group)
+        quickRow.addView(liveAction.group)
+        quickRow.addView(bilingualAction.group)
+        menuCard.addView(quickRow)
+
+        // Region and close remain available as smaller secondary controls.
+        val footer = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        val regionBtn = Button(context).apply {
+            text = context.getString(R.string.floating_menu_btn_capture_region)
+            isAllCaps = false
+            setTextColor(textColor)
+            textSize = 11f
+            background = GradientDrawable().apply {
+                setColor(cardColor)
+                cornerRadius = 12 * dp
+            }
+            setOnClickListener { onCaptureRegion?.invoke() }
+        }
+        footer.addView(regionBtn, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, (40 * dp).toInt(),
+        ).apply { marginEnd = (8 * dp).toInt() })
+
+        val hideContainer = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            background = GradientDrawable().apply {
+                setColor(cardColor)
+                cornerRadius = 12 * dp
+            }
+            setPadding((12 * dp).toInt(), 0, (12 * dp).toInt(), 0)
+            setOnClickListener { onCloseRequested?.invoke() }
+        }
+        hideIcon = ImageView(context).apply {
+            setImageResource(R.drawable.ic_exit_to_app)
+            imageTintList = android.content.res.ColorStateList.valueOf(textColor)
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+        }
+        hideLabel = TextView(context).apply {
+            text = context.getString(R.string.floating_icon_close_label_hide)
+            setTextColor(textColor)
+            textSize = 11f
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.CENTER
+        }
+        hideContainer.addView(hideIcon, LinearLayout.LayoutParams(
+            (20 * dp).toInt(), (20 * dp).toInt(),
+        ).apply { marginEnd = (5 * dp).toInt() })
+        hideContainer.addView(hideLabel)
+        footer.addView(hideContainer, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, (40 * dp).toInt(),
+        ))
+        menuCard.addView(footer)
+
+        addView(menuCard, LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+
+        // Drag-hint pill, centered on screen
+        val dividerColor = context.themeColor(R.attr.ptDivider)
+        val instructionIcon = ImageView(context).apply {
+            setImageResource(R.drawable.ic_gesture_select)
+            imageTintList = android.content.res.ColorStateList.valueOf(textColor)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            layoutParams = LinearLayout.LayoutParams((20 * dp).toInt(), (20 * dp).toInt()).apply {
+                rightMargin = (8 * dp).toInt()
+            }
+        }
+        val instructionLabel = TextView(context).apply {
+            text = context.getString(R.string.floating_menu_drag_instruction)
+            setTextColor(textColor)
+            textSize = 14f
+        }
+        instructionPill = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(
+                (18 * dp).toInt(), (10 * dp).toInt(),
+                (18 * dp).toInt(), (10 * dp).toInt()
+            )
+            background = GradientDrawable().apply {
+                setColor(Color.argb(0xD9, Color.red(bgColor), Color.green(bgColor), Color.blue(bgColor)))
+                setStroke((1 * dp).toInt(), dividerColor)
+                cornerRadius = 100 * dp
+            }
+            addView(instructionIcon)
+            addView(instructionLabel)
+        }
+        addView(instructionPill, LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply {
+            gravity = Gravity.CENTER
+        })
+
+        // Degraded translation warning pill at bottom-center (initially hidden)
+        degradedWarningView = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding((14 * dp).toInt(), (8 * dp).toInt(), (14 * dp).toInt(), (8 * dp).toInt())
+            background = GradientDrawable().apply {
+                setColor(Color.argb(200, 139, 105, 20))
+                cornerRadius = 16 * dp
+            }
+            visibility = View.GONE
+            val icon = TextView(context).apply {
+                text = "⚠"
+                textSize = 14f
+                setTextColor(context.themeColor(R.attr.ptWarning))
+            }
+            val label = TextView(context).apply {
+                // Initial text is a safe default — overwritten by
+                // [degradedWarningKind]'s setter before the pill is shown.
+                setText(R.string.degraded_warning_offline)
+                setTextColor(Color.WHITE)
+                textSize = 12f
+            }
+            degradedWarningLabel = label
+            addView(icon)
+            addView(label, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                // Visual gap between the ⚠ icon glyph and the label.
+                // Previously the resource strings carried two leading
+                // spaces; consolidated to a marginStart so translators
+                // don't have to preserve invisible whitespace.
+                marginStart = (6 * dp).toInt()
+            })
+        }
+        addView(degradedWarningView, LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply {
+            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            bottomMargin = (32 * dp).toInt()
+        })
+
+        // Gear icon for settings — positioned above/below menu card in positionNearIcon
+        val gearSize = (48 * dp).toInt()
+        val gearIcon = ImageView(context).apply {
+            setImageResource(R.drawable.ic_settings)
+            imageTintList = android.content.res.ColorStateList.valueOf(textColor)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            val gearPad = (10 * dp).toInt()
+            setPadding(gearPad, gearPad, gearPad, gearPad)
+        }
+        settingsBtn = FrameLayout(context).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.argb(0xD9, Color.red(bgColor), Color.green(bgColor), Color.blue(bgColor)))
+                setStroke((1 * dp).toInt(), borderColor)
+            }
+            elevation = 4 * dp
+            addView(gearIcon, LayoutParams(gearSize, gearSize))
+            setOnClickListener { onSettings?.invoke() }
+            visibility = View.INVISIBLE
+        }
+        addView(settingsBtn, LayoutParams(gearSize, gearSize))
+
+        val styleGlyph = TextView(context).apply {
+            text = "✦"
+            setTextColor(textColor)
+            textSize = 22f
+            gravity = Gravity.CENTER
+            contentDescription = context.getString(R.string.floating_icon_style_title)
+        }
+        iconStyleBtn = FrameLayout(context).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.argb(0xD9, Color.red(bgColor), Color.green(bgColor), Color.blue(bgColor)))
+                setStroke((1 * dp).toInt(), borderColor)
+            }
+            elevation = 4 * dp
+            addView(styleGlyph, LayoutParams(gearSize, gearSize))
+            setOnClickListener { onIconStyle?.invoke() }
+            visibility = View.INVISIBLE
+        }
+        addView(iconStyleBtn, LayoutParams(gearSize, gearSize))
+    }
+
+    private fun updateLiveButton() {
+        if (isLiveMode) {
+            liveIcon.text = context.getString(R.string.floating_menu_live_pause_glyph)
+            liveIcon.textSize = 20f
+            liveIcon.setTextColor("#E8E8E8".toColorInt())
+            liveIcon.setPadding(0, 0, 0, 0)
+            liveLabel.text = context.getString(R.string.live_mode_pause_auto_label)
+            (liveBtn.background as? GradientDrawable)?.setColor(dangerColor)
+        } else {
+            liveIcon.text = "\u25B6" // ▶ play
+            liveIcon.textSize = 26f
+            liveIcon.setTextColor(onAccentColor)
+            liveIcon.setPadding((2 * dp).toInt(), 0, 0, (1 * dp).toInt())
+            liveLabel.text = hintModeLabel
+                ?.let { context.getString(R.string.live_mode_auto_with_hint, it) }
+                ?: context.getString(R.string.quick_action_live)
+            (liveBtn.background as? GradientDrawable)?.setColor(accentColor)
+        }
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        val sel = selectionRect
+        if (sel != null && isDragging) {
+            // User is dragging a new region selection
+            val sc = canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), null)
+            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), dimPaint)
+            canvas.drawRect(sel, clearPaint)
+            canvas.restoreToCount(sc)
+            // Card-colored base border + accent dashes (screen-space stable)
+            canvas.drawRect(sel, selectionBasePaint)
+            val dashPx = selDashLen * dp
+            val gapPx = selGapLen * dp
+            val period = dashPx + gapPx
+            drawScreenDashes(canvas, sel.left, sel.top, sel.right, sel.top, dashPx, period, true)
+            drawScreenDashes(canvas, sel.right, sel.top, sel.right, sel.bottom, dashPx, period, false)
+            drawScreenDashes(canvas, sel.left, sel.bottom, sel.right, sel.bottom, dashPx, period, true)
+            drawScreenDashes(canvas, sel.left, sel.top, sel.left, sel.bottom, dashPx, period, false)
+        } else {
+            val region = activeRegion
+            if (region != null && !region.isFullScreen) {
+                // Show the active capture region as a clear window
+                val w = width.toFloat()
+                val h = height.toFloat()
+                regionRect.set(
+                    region.left * w, region.top * h,
+                    region.right * w, region.bottom * h
+                )
+                canvas.drawRect(0f, 0f, w, h, dimPaint)
+                canvas.drawRect(regionRect, regionFillPaint)
+                canvas.drawRect(regionRect, regionStrokePaint)
+                // Label centered in the region (shadow provides contrast)
+                val label = context.getString(R.string.region_label_current_capture)
+                val labelCx = regionRect.centerX()
+                val labelCy = regionRect.centerY()
+                canvas.drawText(label, labelCx,
+                    labelCy - (regionLabelPaint.descent() + regionLabelPaint.ascent()) / 2,
+                    regionLabelPaint)
+            } else {
+                canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), dimPaint)
+            }
+        }
+    }
+
+    /** Required by ClickableViewAccessibility — the menu intercepts touches
+     *  to detect tap-outside-the-card dismissal, not "click on the menu
+     *  itself". No accessibility-click action to expose; the menu's row
+     *  buttons (which use setOnClickListener) are the actionable items
+     *  TalkBack should focus and activate. */
+    override fun performClick(): Boolean {
+        super.performClick()
+        return true
+    }
+
+    // onTouchEvent detects tap-outside-the-card dismissal, not clicks on
+    // this view — no click semantic to wire through performClick. The
+    // inner row buttons have their own setOnClickListener.
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                val loc = IntArray(2)
+                menuCard.getLocationOnScreen(loc)
+                val menuRect = RectF(
+                    loc[0].toFloat(), loc[1].toFloat(),
+                    loc[0].toFloat() + menuCard.width, loc[1].toFloat() + menuCard.height
+                )
+                if (menuRect.contains(event.rawX, event.rawY)) {
+                    return super.onTouchEvent(event)
+                }
+                potentialDrag = true
+                dragStartX = event.x
+                dragStartY = event.y
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (!potentialDrag) return super.onTouchEvent(event)
+                val dx = event.x - dragStartX
+                val dy = event.y - dragStartY
+                if (!isDragging && (dx * dx + dy * dy > touchSlop * touchSlop)) {
+                    isDragging = true
+                    menuCard.isGone = true
+                    instructionPill.isGone = true
+                    clearRegionButton?.visibility = View.GONE
+                }
+                if (isDragging) {
+                    val left   = minOf(dragStartX, event.x)
+                    val top    = minOf(dragStartY, event.y)
+                    val right  = maxOf(dragStartX, event.x)
+                    val bottom = maxOf(dragStartY, event.y)
+                    selectionRect = RectF(left, top, right, bottom)
+                    invalidate()
+                }
+                return true
+            }
+            MotionEvent.ACTION_UP -> {
+                if (isDragging) {
+                    val sel = selectionRect
+                    if (sel != null && sel.width() > touchSlop && sel.height() > touchSlop) {
+                        val w = width.toFloat()
+                        val h = height.toFloat()
+                        if (w > 0 && h > 0) {
+                            onRegionSelected?.invoke(
+                                RegionEntry("Drawn Region", sel.top / h, sel.bottom / h, sel.left / w, sel.right / w)
+                            )
+                        }
+                    }
+                    isDragging = false
+                    potentialDrag = false
+                    selectionRect = null
+                    return true
+                }
+                potentialDrag = false
+                onDismiss?.invoke()
+                return true
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                isDragging = false
+                potentialDrag = false
+                selectionRect = null
+                invalidate()
+                return true
+            }
+        }
+        return super.onTouchEvent(event)
+    }
+
+    // ── Positioning ──────────────────────────────────────────────────────
+
+    @Suppress("UNUSED_PARAMETER")
+    /** Draws dashes along a line at fixed screen-space positions. */
+    private fun drawScreenDashes(
+        canvas: Canvas, x1: Float, y1: Float, x2: Float, y2: Float,
+        dashPx: Float, period: Float, horizontal: Boolean
+    ) {
+        if (horizontal) {
+            val y = y1
+            var pos = (x1 / period).toInt() * period
+            if (pos > x1) pos -= period
+            while (pos < x2) {
+                val s = pos.coerceAtLeast(x1)
+                val e = (pos + dashPx).coerceAtMost(x2)
+                if (e > s) canvas.drawLine(s, y, e, y, selectionDashPaint)
+                pos += period
+            }
+        } else {
+            val x = x1
+            var pos = (y1 / period).toInt() * period
+            if (pos > y1) pos -= period
+            while (pos < y2) {
+                val s = pos.coerceAtLeast(y1)
+                val e = (pos + dashPx).coerceAtMost(y2)
+                if (e > s) canvas.drawLine(x, s, x, e, selectionDashPaint)
+                pos += period
+            }
+        }
+    }
+
+    fun positionNearIcon(iconCx: Int, iconCy: Int, iconEdge: FloatingOverlayIcon.Edge, screenW: Int, screenH: Int) {
+        post {
+            menuCard.measure(
+                MeasureSpec.makeMeasureSpec(screenW, MeasureSpec.AT_MOST),
+                MeasureSpec.makeMeasureSpec(screenH, MeasureSpec.AT_MOST)
+            )
+            val mw = menuCard.measuredWidth
+            val mh = menuCard.measuredHeight
+            val margin = (16 * dp).toInt()
+
+            val lp = menuCard.layoutParams as LayoutParams
+
+            val menuX = if (iconEdge == FloatingOverlayIcon.Edge.LEFT) {
+                margin
+            } else {
+                screenW - mw - margin
+            }
+
+            val menuY = (iconCy - mh / 2).coerceIn(margin, screenH - mh - margin)
+
+            lp.gravity = Gravity.TOP or Gravity.START
+            lp.leftMargin = menuX
+            lp.topMargin = menuY
+            menuCard.layoutParams = lp
+            menuCard.isVisible = true
+
+            menuCard.alpha = 0f
+            menuCard.scaleX = 0.8f
+            menuCard.scaleY = 0.8f
+            menuCard.animate()
+                .alpha(1f)
+                .scaleX(1f)
+                .scaleY(1f)
+                .setDuration(150)
+                .setInterpolator(DecelerateInterpolator())
+                .start()
+
+            // Position gear icon centered above (or below) the menu card
+            val gearSize = (48 * dp).toInt()
+            val gearGap = (8 * dp).toInt()
+            val controlsWidth = gearSize * 2 + gearGap
+            val controlsX = menuX + (mw - controlsWidth) / 2
+            val gearAboveY = menuY - gearSize - gearGap
+            val gearBelowY = menuY + mh + gearGap
+            val gearY = if (gearAboveY >= 0) gearAboveY else gearBelowY
+            val glp = settingsBtn.layoutParams as LayoutParams
+            glp.gravity = Gravity.TOP or Gravity.START
+            glp.leftMargin = controlsX
+            glp.topMargin = gearY
+            settingsBtn.layoutParams = glp
+            settingsBtn.isVisible = true
+            settingsBtn.alpha = 0f
+            settingsBtn.scaleX = 0.8f
+            settingsBtn.scaleY = 0.8f
+            settingsBtn.animate()
+                .alpha(1f).scaleX(1f).scaleY(1f)
+                .setDuration(150)
+                .setInterpolator(DecelerateInterpolator()).start()
+
+            val slp = iconStyleBtn.layoutParams as LayoutParams
+            slp.gravity = Gravity.TOP or Gravity.START
+            slp.leftMargin = controlsX + gearSize + gearGap
+            slp.topMargin = gearY
+            iconStyleBtn.layoutParams = slp
+            iconStyleBtn.isVisible = true
+            iconStyleBtn.alpha = 0f
+            iconStyleBtn.scaleX = 0.8f
+            iconStyleBtn.scaleY = 0.8f
+            iconStyleBtn.animate()
+                .alpha(1f).scaleX(1f).scaleY(1f)
+                .setDuration(150)
+                .setInterpolator(DecelerateInterpolator()).start()
+
+            // Show red X button to clear region (if a custom region is active)
+            showClearRegionButton(iconEdge, screenW, screenH)
+        }
+    }
+
+    private fun showClearRegionButton(iconEdge: FloatingOverlayIcon.Edge, screenW: Int, screenH: Int) {
+        clearRegionButton?.let { removeView(it) }
+        clearRegionButton = null
+
+        val region = activeRegion ?: return
+        if (region.isFullScreen) return
+
+        val btnSize = (36 * dp).toInt()
+        val touchSize = (56 * dp).toInt()
+        val touchPad = (touchSize - btnSize) / 2
+        val regionRect = RectF(
+            region.left * screenW, region.top * screenH,
+            region.right * screenW, region.bottom * screenH
+        )
+
+        // Position on the opposite side from the menu
+        val btnX = if (iconEdge == FloatingOverlayIcon.Edge.LEFT) {
+            (regionRect.right - btnSize - 8 * dp).toInt()
+        } else {
+            (regionRect.left + 8 * dp).toInt()
+        }
+        val btnY = (regionRect.top + 8 * dp).toInt()
+
+        val btn = View(context).apply {
+            background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(dangerColor)
+            }
+            setOnClickListener {
+                onClearRegion?.invoke()
+                onDismiss?.invoke()
+            }
+        }
+
+        // Draw X using a simple TextView overlay
+        val xLabel = TextView(context).apply {
+            text = "✕"
+            setTextColor(Color.WHITE)
+            textSize = 16f
+            gravity = Gravity.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+        }
+
+        val container = FrameLayout(context).apply {
+            val innerLp = FrameLayout.LayoutParams(btnSize, btnSize).apply {
+                gravity = Gravity.CENTER
+            }
+            addView(btn, innerLp)
+            addView(xLabel, FrameLayout.LayoutParams(touchSize, touchSize).apply {
+                gravity = Gravity.CENTER
+            })
+            setOnClickListener {
+                onClearRegion?.invoke()
+                onDismiss?.invoke()
+            }
+        }
+
+        val lp = LayoutParams(touchSize, touchSize).apply {
+            gravity = Gravity.TOP or Gravity.START
+            leftMargin = btnX - touchPad
+            topMargin = btnY - touchPad
+        }
+        addView(container, lp)
+        clearRegionButton = container
+    }
+}

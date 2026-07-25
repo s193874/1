@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="quick_action_screenshot">截图翻译</string>
+    <string name="quick_action_live">实时翻译</string>
+    <string name="quick_action_bilingual">双语注释</string>
+    <string name="floating_icon_style_title">悬浮球样式</string>
+    <string name="floating_icon_style_preview">悬浮球预览</string>
+    <string name="floating_icon_style_choose">上传图片</string>
+    <string name="floating_icon_style_opacity">透明度：%1$d%%</string>
+    <string name="floating_icon_style_scale">图片大小：%1$d%%</string>
+    <string name="floating_icon_style_reset">恢复默认</string>
+    <string name="floating_icon_style_save">保存</string>
+</resources>
