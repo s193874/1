@@ -116,7 +116,7 @@ class FloatingIconStyleActivity : AppCompatActivity() {
         })
         root.addView(buttons, rowParams(dp))
         setContentView(ScrollView(this).apply {
-            addView(root, ScrollView.LayoutParams(
+            addView(root, ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
             ))
