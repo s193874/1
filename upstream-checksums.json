@@ -6,5 +6,12 @@
   "app/src/main/java/com/playtranslate/ui/FloatingIconMenu.kt": "9f1c1361f7fedfcaf88b3e11e3e60b56163c146d7de63beacd14b4344b5eb476",
   "app/src/main/java/com/playtranslate/ui/FloatingOverlayIcon.kt": "94ffe97091a4d98fd49e998fbf3697f64279b8c5f4c5bfaeea44831beedd85fe",
   "app/src/main/java/com/playtranslate/ui/TextBox.kt": "2a1fec240a8179ef467e32002a091b8038e7b9d217c533173e39854d83302834",
-  "app/src/main/java/com/playtranslate/ui/TranslationOverlayView.kt": "c82f4cc4b99c815fbed5d4d1dd2b1132ed103bd57d13edf59da393cb58e646d0"
+  "app/src/main/java/com/playtranslate/ui/TranslationOverlayView.kt": "c82f4cc4b99c815fbed5d4d1dd2b1132ed103bd57d13edf59da393cb58e646d0",
+  "app/src/main/java/com/playtranslate/Prefs.kt": "5026533feca6490fc9019a7dc6076a0d23f7ca4360d7239ebcb0f27fca667fd1",
+  "app/src/main/java/com/playtranslate/RegionOverlayController.kt": "403db5bd20263e8a0d5caed241b88bfcdf67f76d1c32def9c1209b19001ad905",
+  "app/src/main/java/com/playtranslate/ui/AppearanceSettingsActivity.kt": "3987126d28439f82799e640d2549c3e4d5ad50bba49bb51ad3c7dd383bab35ed",
+  "app/src/main/java/com/playtranslate/ui/RegionDragView.kt": "26b7a1ef9b17f1baa3d9d86813b0b2488960fd2ee60f53188661f7a01184e48e",
+  "app/src/main/java/com/playtranslate/ui/SettingsRenderer.kt": "19348c6f6d5b86b5a33eb3c6f0f37e591c907291fe1d2950139747cb2509f401",
+  "app/src/main/res/layout/activity_appearance_settings.xml": "88f3268b1affbc4818f22d83a9747e0d010d8d2f18a339304673e098d1ae8f56",
+  "app/src/main/res/layout/dialog_settings.xml": "d79ccde4f1f75ae9a865955b42b3721bda88b703133f97082ae9293f41c91e80"
 }

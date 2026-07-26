@@ -2319,9 +2319,17 @@ class CaptureService : Service() {
         // foreground service (Android 14+). A one-shot capture
         // (MediaProjectionCaptureSource.requestClean) can acquire consent and
         // leave the projection warm with neither live mode nor a floating icon
-        // up — iconShowing || isLive alone would then stopForeground() out
-        // from under an active projection and the system would tear it down.
-        if (iconShowing || isLive || mediaProjectionController.hasConsent) {
+        // up — isLive alone would then stopForeground() out from under an
+        // active projection and the system would tear it down.
+        //
+        // An idle floating icon deliberately does NOT hold foreground status:
+        // in accessibility mode the icon is hosted by the always-bound
+        // accessibility service (which also keeps this process perceptible),
+        // and in MediaProjection mode hasConsent is true for the whole
+        // session anyway. Dropping the icon from this predicate is what
+        // removes the persistent notification — and any battery-visible
+        // presence — while the bubble is just sitting there untapped.
+        if (isLive || mediaProjectionController.hasConsent) {
             enterForeground()
         } else {
             stopForeground(STOP_FOREGROUND_REMOVE)

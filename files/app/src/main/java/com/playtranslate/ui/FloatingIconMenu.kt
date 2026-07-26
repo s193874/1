@@ -15,7 +15,6 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
-import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -306,26 +305,13 @@ class FloatingIconMenu(context: Context) : FrameLayout(context) {
         quickRow.addView(bilingualAction.group)
         menuCard.addView(quickRow)
 
-        // Region and close remain available as smaller secondary controls.
+        // Footer keeps only the hide/turn-off control — region selection is
+        // covered by drag-to-select on the dimmed backdrop (see onTouchEvent),
+        // so the dedicated region button is gone.
         val footer = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        val regionBtn = Button(context).apply {
-            text = context.getString(R.string.floating_menu_btn_capture_region)
-            isAllCaps = false
-            setTextColor(textColor)
-            textSize = 11f
-            background = GradientDrawable().apply {
-                setColor(cardColor)
-                cornerRadius = 12 * dp
-            }
-            setOnClickListener { onCaptureRegion?.invoke() }
-        }
-        footer.addView(regionBtn, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, (40 * dp).toInt(),
-        ).apply { marginEnd = (8 * dp).toInt() })
-
         val hideContainer = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER

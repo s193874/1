@@ -10,4 +10,11 @@
     <string name="floating_icon_style_scale">图片大小：%1$d%%</string>
     <string name="floating_icon_style_reset">恢复默认</string>
     <string name="floating_icon_style_save">保存</string>
+    <string name="overlay_box_section_title">翻译浮层</string>
+    <string name="overlay_box_style_adaptive">自适应</string>
+    <string name="overlay_box_style_dark">深色</string>
+    <string name="overlay_box_style_light">浅色</string>
+    <string name="overlay_box_opacity_label">背景不透明度：%1$d%%</string>
+    <string name="settings_cell_advanced">高级功能</string>
+    <string name="settings_cell_advanced_summary">快捷键 · Anki · 词典 · 朗读</string>
 </resources>

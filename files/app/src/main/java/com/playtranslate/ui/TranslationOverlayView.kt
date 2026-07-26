@@ -196,10 +196,15 @@ class TranslationOverlayView(
     }
 
     fun setBoxes(
-        boxes: List<TextBox>,
+        rawBoxes: List<TextBox>,
         cropLeft: Int, cropTop: Int,
         screenshotW: Int, screenshotH: Int
     ) {
+        // User appearance settings (colour mode / opacity) are folded into
+        // the box list up front so every downstream consumer — rendering,
+        // fuzzy matching, pinhole diffing, view tags — sees one consistent
+        // set of colours.
+        val boxes = OverlayBoxStyle.applyTo(context, rawBoxes)
         // Skip everything if content is identical (avoids flash on false-positive recaptures)
         if (this.boxes == boxes && cropOffsetX == cropLeft && cropOffsetY == cropTop
             && this.screenshotW == screenshotW && this.screenshotH == screenshotH) return

@@ -1042,6 +1042,16 @@ class OverlayUiController(
     // ── Floating icon menu ───────────────────────────────────────────────
 
     private fun showFloatingMenu(display: Display, icon: FloatingOverlayIcon) {
+        // Idle-when-visible: the service no longer holds foreground status
+        // while the bubble just sits there, so the system may have reclaimed
+        // it since the last session. Every menu action goes through
+        // CaptureService.instance — restart it here so those calls resolve
+        // by the time the user picks an action.
+        if (CaptureService.instance == null) {
+            androidx.core.content.ContextCompat.startForegroundService(
+                context, Intent(context, CaptureService::class.java)
+            )
+        }
         CaptureService.instance?.cancelQuickOneShotForMenu()
         dismissFloatingMenu()
         val wm = context.createDisplayContext(display).getSystemService(WindowManager::class.java) ?: return
