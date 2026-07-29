@@ -6,7 +6,8 @@ on:
     branches: [ main ]
 
 permissions:
-  contents: read
+  contents: write
+  issues: write
 
 jobs:
   build:
@@ -47,8 +48,9 @@ jobs:
       - name: Build debug APK
         working-directory: upstream
         run: |
+          set -o pipefail
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug --stacktrace 2>&1 | tee ../build.log
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -56,3 +58,31 @@ jobs:
           name: PlayTranslate-QuickBubble-debug-apk
           path: upstream/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      - name: Publish direct-download APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp upstream/app/build/outputs/apk/debug/app-debug.apk PlayTranslate-SteelBlue-v2.4.1-debug.apk
+          if gh release view steel-blue-v2 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload steel-blue-v2 PlayTranslate-SteelBlue-v2.4.1-debug.apk --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create steel-blue-v2 PlayTranslate-SteelBlue-v2.4.1-debug.apk \
+              --title "PlayTranslate Steel Blue v2" \
+              --notes "深色钢蓝主题、整页稳定实时翻译、拖动识别提速、截图与通知隐私修复、背景/头像/悬浮球个性化。" \
+              --latest --repo "$GITHUB_REPOSITORY"
+          fi
+
+      - name: Report build failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo '自动构建失败，下面是末尾日志：'
+            echo '```'
+            tail -n 220 build.log 2>/dev/null || echo 'build.log unavailable'
+            echo '```'
+          } > failure.md
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "Build failed: ${GITHUB_SHA::8}" --body-file failure.md
