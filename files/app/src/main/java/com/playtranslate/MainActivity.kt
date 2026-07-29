@@ -742,7 +742,7 @@ class MainActivity :
     // ── Setup ─────────────────────────────────────────────────────────────
 
     private fun applyPersonalBackground() {
-        val background = findViewById<ImageView?>(R.id.customBackground) ?: return
+        val background = findViewById<ImageView>(R.id.customBackground) ?: return
         val uri = PersonalizationPrefs(this).backgroundUri
         if (uri == null) {
             background.setImageDrawable(null)
