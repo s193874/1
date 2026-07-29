@@ -13,6 +13,19 @@
     android:background="@drawable/bg_app_aurora"
     tools:context=".MainActivity">
 
+    <ImageView
+        android:id="@+id/customBackground"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:alpha="0.28"
+        android:contentDescription="@null"
+        android:scaleType="centerCrop"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
     <!-- ── Results container — hosts TranslationResultFragment ────────── -->
     <androidx.fragment.app.FragmentContainerView
         android:id="@+id/resultsContainer"

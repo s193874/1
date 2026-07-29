@@ -2336,6 +2336,20 @@ class CaptureService : Service() {
         }
     }
 
+    /**
+     * The system treats an active MediaProjection as ongoing screen sharing
+     * and may redact notification previews. When the user returns to this app
+     * and live translation is already stopped, release that idle projection
+     * immediately so normal screenshots and notification previews recover.
+     */
+    fun releaseIdleMediaProjection() {
+        if (!isLive && CaptureBackendResolver.isUsingMediaProjection &&
+            mediaProjectionController.hasConsent) {
+            mediaProjectionController.destroy()
+            updateForegroundState()
+        }
+    }
+
     /** Promote the foreground service to include the mediaProjection type.
      *  MUST run before MediaProjectionManager.getMediaProjection() on API
      *  34+. Routes through [enterForeground], which derives the type from

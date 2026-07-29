@@ -86,6 +86,7 @@ import com.playtranslate.ui.RegionPickerSheet
 import com.playtranslate.ui.SettingsBottomSheet
 import com.playtranslate.ui.LastSentenceCache
 import com.playtranslate.ui.TranslationResultFragment
+import com.playtranslate.ui.PersonalizationPrefs
 import com.playtranslate.ui.WordDetailBottomSheet
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -290,6 +291,7 @@ class MainActivity :
         override fun onServiceConnected(name: ComponentName, binder: IBinder) {
             captureService = (binder as CaptureService.LocalBinder).getService()
             serviceConnected = true
+            captureService?.releaseIdleMediaProjection()
             wireServiceCallbacks()
         }
         override fun onServiceDisconnected(name: ComponentName) {
@@ -386,6 +388,7 @@ class MainActivity :
             }
         }
         setContentView(R.layout.activity_main)
+        applyPersonalBackground()
         // Pad for system chrome only (status bar top, cutout sides, nav bar
         // bottom). IME insets are deliberately NOT folded in here and the
         // listener returns a NON-CONSUMED but STRIPPED WindowInsetsCompat —
@@ -407,17 +410,11 @@ class MainActivity :
                 .build()
         }
 
-        // Prevent PlayTranslate's own UI from appearing in screenshots
-        // (including the accessibility takeScreenshot path used by the
-        // capture loop). In Android multi-window mode both the game and
-        // this app share one display; without FLAG_SECURE the OCR would
-        // read the translated text we just rendered and try to translate
-        // it again, creating a feedback loop. SurfaceFlinger enforces
-        // FLAG_SECURE in all capture paths, so this is a complete fix.
-        // Cost: system screenshot tools can't capture PlayTranslate's own
-        // UI — users who want to share their translator UI would have to
-        // screenshot externally, which is acceptable for a translation tool.
-        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        // Keep the app screenshotable. Live capture already excludes its own
+        // foreground display; FLAG_SECURE made Android label every in-app
+        // screenshot as protected/private content and was unnecessarily
+        // surprising for users.
+        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
 
         hideNavigationBar()
 
@@ -603,6 +600,7 @@ class MainActivity :
 
     override fun onResume() {
         super.onResume()
+        applyPersonalBackground()
         // Appearance (theme mode / accent) is changed on the standalone
         // AppearanceSettingsActivity, which writes the prefs and recreates
         // itself. MainActivity, sitting behind it, re-applies on return: if
@@ -632,6 +630,7 @@ class MainActivity :
         // the app's own display for one cycle.
         PlayTranslateApplication.markResumed(this)
         isInForeground = true
+        captureService?.releaseIdleMediaProjection()
         dimController?.onInteraction()
         setupDetectionLog()
         // Service event subscription is set up once in
@@ -741,6 +740,18 @@ class MainActivity :
     }
 
     // ── Setup ─────────────────────────────────────────────────────────────
+
+    private fun applyPersonalBackground() {
+        val background = findViewById<ImageView?>(R.id.customBackground) ?: return
+        val uri = PersonalizationPrefs(this).backgroundUri
+        if (uri == null) {
+            background.setImageDrawable(null)
+            background.visibility = View.GONE
+        } else {
+            background.setImageURI(uri)
+            background.visibility = View.VISIBLE
+        }
+    }
 
     private fun bindViews() {
         btnTranslate         = findViewById(R.id.btnTranslate)

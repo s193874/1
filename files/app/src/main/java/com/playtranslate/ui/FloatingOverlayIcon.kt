@@ -60,6 +60,7 @@ class FloatingOverlayIcon(context: Context) : View(context) {
     private var customBitmap: Bitmap? = null
     private var customOpacity: Float = 0.72f
     private var customScale: Float = 0.9f
+    private var customColor: Int = "#E65F8FB3".toColorInt()
     private val customPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val customDst = RectF()
     private val customClip = Path()
@@ -74,6 +75,7 @@ class FloatingOverlayIcon(context: Context) : View(context) {
         val prefs = FloatingIconStylePrefs(context)
         customOpacity = prefs.opacity
         customScale = prefs.scale
+        customColor = prefs.color
         val uri = prefs.imageUri
         if (uri != null) {
             customBitmap = decodeFloatingIconBitmap(context, uri)
@@ -82,8 +84,8 @@ class FloatingOverlayIcon(context: Context) : View(context) {
     }
 
     // ── Normal mode paints ──────────────────────────────────────────────
-    private val defaultCircleColor = "#D98A7BEF".toColorInt()
-    private val liveCircleColor = "#E6F184AD".toColorInt()
+    private val defaultCircleColor = "#E65F8FB3".toColorInt()
+    private val liveCircleColor = "#E66FA6CE".toColorInt()
     private val liveDegradedCircleColor = "#E6E7B85B".toColorInt()
     private val circlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = defaultCircleColor
@@ -370,7 +372,7 @@ class FloatingOverlayIcon(context: Context) : View(context) {
         circlePaint.color = when {
             liveMode && degraded -> liveDegradedCircleColor
             liveMode -> liveCircleColor
-            else -> defaultCircleColor
+            else -> customColor
         }
 
         if (inDragMode) {

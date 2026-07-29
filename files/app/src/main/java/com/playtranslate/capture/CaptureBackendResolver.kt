@@ -1,0 +1,85 @@
+package com.playtranslate.capture
+
+import android.content.Context
+import android.os.Build
+import android.provider.Settings
+import com.playtranslate.CaptureService
+import com.playtranslate.OverlayUiController
+import com.playtranslate.PlayTranslateAccessibilityService
+
+/**
+ * The single place that decides which [CaptureBackend] is active. Consumers
+ * (CaptureService and the capture/overlay call sites) route through [active]
+ * and [activeOverlayUi] and never read the backend preference themselves — so
+ * the MediaProjection-vs-accessibility split stays contained here.
+ *
+ * The active backend is swapped only by [reresolve], which derives it from the
+ * granted permissions. [active] reads a cached flag, so it stays cheap on the
+ * hot path.
+ */
+object CaptureBackendResolver {
+
+    @Volatile
+    private var useMediaProjection = false
+
+    val isUsingMediaProjection: Boolean
+        get() = useMediaProjection || Build.VERSION.SDK_INT < Build.VERSION_CODES.R
+
+    /** The capture backend the app should use right now. Below API 30 the
+     *  accessibility `takeScreenshot` path doesn't exist, so MediaProjection is
+     *  the only possible backend regardless of the cached flag. */
+    fun active(): CaptureBackend =
+        if (useMediaProjection || Build.VERSION.SDK_INT < Build.VERSION_CODES.R)
+            MediaProjectionCaptureBackend
+        else
+            AccessibilityCaptureBackend
+
+    /** Convenience: the active backend's overlay UI controller, or null while
+     *  it isn't ready. Overlay-producing call sites route through this. */
+    val activeOverlayUi: OverlayUiController?
+        get() = active().overlayUi
+
+    /** Convenience: the active backend's [LiveCaptureSource], or null when the
+     *  backend can't drive live mode / isn't ready. Live-mode drivers route
+     *  capture through this. */
+    val activeLiveCaptureSource: LiveCaptureSource?
+        get() = active().liveCaptureSource
+
+    /**
+     * Re-derive the active backend from the granted permissions and swap if it
+     * changed: the accessibility service being enabled selects the
+     * accessibility backend; otherwise "display over other apps" being granted
+     * selects MediaProjection; with neither, the accessibility backend stands
+     * (onboarding asks for a permission). Called at app start and from
+     * MainActivity.refreshReadiness so a permission granted in system
+     * Settings is picked up on the next resume. Stops live mode, releases the
+     * outgoing MediaProjection session, and hides the outgoing backend's
+     * overlays before the swap, then brings up the incoming backend's floating
+     * icon(s).
+     */
+    fun reresolve(context: Context) {
+        // Below API 30 MediaProjection is the only capture backend (no
+        // accessibility takeScreenshot) — select it unconditionally so no surface
+        // ever offers the impossible accessibility upgrade. Overlay permission
+        // gates *readiness* (see OnboardingViewModel / requestMediaProjectionControls),
+        // not backend identity, so it's deliberately not part of this choice.
+        // On API 30+: accessibility takes precedence when its service is enabled,
+        // even if "display over other apps" is also granted.
+        val want = Build.VERSION.SDK_INT < Build.VERSION_CODES.R ||
+            (!PlayTranslateAccessibilityService.isEnabled(context) &&
+                Settings.canDrawOverlays(context))
+        if (want == useMediaProjection) return
+        CaptureService.instance?.let { svc ->
+            if (svc.isLive) svc.stopLive()
+            // Outgoing MediaProjection backend: release its session (consent
+            // token, VirtualDisplay, ImageReader) so a stale projection doesn't
+            // linger — and keep the service foreground — under the now-inactive
+            // backend. teardown() is the same release onDestroy / the off
+            // switch use; stopLive() above already stopped any capture loops.
+            if (useMediaProjection) svc.mediaProjectionController.destroy()
+        }
+        active().overlayUi?.hideAll()
+        useMediaProjection = want
+        active().overlayUi?.reconcileFloatingIcons()
+    }
+}

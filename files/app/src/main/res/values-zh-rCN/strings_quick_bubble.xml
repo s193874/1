@@ -13,6 +13,12 @@
     <string name="floating_icon_style_scale">图片大小：%1$d%%</string>
     <string name="floating_icon_style_reset">恢复默认</string>
     <string name="floating_icon_style_save">保存</string>
+    <string name="floating_icon_style_color_title">默认悬浮球颜色</string>
+    <string name="personal_images_title">个性图片</string>
+    <string name="personal_images_hint">为首页选择背景，并为待机页选择头像</string>
+    <string name="personal_background_choose">上传背景</string>
+    <string name="personal_avatar_choose">上传头像</string>
+    <string name="personal_images_clear">恢复默认</string>
     <string name="overlay_box_section_title">翻译浮层</string>
     <string name="overlay_box_style_adaptive">自适应</string>
     <string name="overlay_box_style_dark">深色</string>

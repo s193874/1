@@ -19,23 +19,29 @@ class FloatingIconStylePrefs(context: Context) {
     val scale: Float
         get() = prefs.getFloat(KEY_SCALE, DEFAULT_SCALE).coerceIn(0.55f, 1f)
 
-    fun save(uri: Uri?, opacity: Float, scale: Float) {
+    val color: Int
+        get() = prefs.getInt(KEY_COLOR, DEFAULT_COLOR)
+
+    fun save(uri: Uri?, opacity: Float, scale: Float, color: Int = this.color) {
         prefs.edit {
             if (uri == null) remove(KEY_URI) else putString(KEY_URI, uri.toString())
             putFloat(KEY_OPACITY, opacity.coerceIn(0.2f, 1f))
             putFloat(KEY_SCALE, scale.coerceIn(0.55f, 1f))
+            putInt(KEY_COLOR, color)
         }
     }
 
-    fun reset() = save(null, DEFAULT_OPACITY, DEFAULT_SCALE)
+    fun reset() = save(null, DEFAULT_OPACITY, DEFAULT_SCALE, DEFAULT_COLOR)
 
     companion object {
         private const val NAME = "floating_icon_style"
         private const val KEY_URI = "image_uri"
         private const val KEY_OPACITY = "opacity"
         private const val KEY_SCALE = "scale"
+        private const val KEY_COLOR = "color"
         const val DEFAULT_OPACITY = 0.72f
         const val DEFAULT_SCALE = 0.9f
+        const val DEFAULT_COLOR = -429944909 // #E65F8FB3
     }
 }
 

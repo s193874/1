@@ -1,10 +1,12 @@
 package com.playtranslate.ui
 
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.LayerDrawable
 import android.os.Bundle
+import android.net.Uri
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -14,6 +16,7 @@ import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.activity.viewModels
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -39,6 +42,25 @@ class AppearanceSettingsActivity : SettingsSubPageActivity() {
     override val layoutResId = R.layout.activity_appearance_settings
 
     private val vm: AppearanceViewModel by viewModels()
+    private val personalPrefs by lazy { PersonalizationPrefs(this) }
+
+    private val pickBackground = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let {
+            persistImagePermission(it)
+            personalPrefs.setBackground(it)
+        }
+    }
+
+    private val pickAvatar = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let {
+            persistImagePermission(it)
+            personalPrefs.setAvatar(it)
+        }
+    }
 
     override fun onContentCreated(savedInstanceState: Bundle?) {
         val themeContainer = findViewById<LinearLayout>(R.id.llThemeModePicker)
@@ -52,6 +74,24 @@ class AppearanceSettingsActivity : SettingsSubPageActivity() {
             }
         }
         buildOverlayBoxSection()
+        findViewById<View>(R.id.btnChooseBackground).setOnClickListener {
+            pickBackground.launch(arrayOf("image/png", "image/webp", "image/jpeg"))
+        }
+        findViewById<View>(R.id.btnChooseAvatar).setOnClickListener {
+            pickAvatar.launch(arrayOf("image/png", "image/webp", "image/jpeg"))
+        }
+        findViewById<View>(R.id.btnClearPersonalImages).setOnClickListener {
+            personalPrefs.setBackground(null)
+            personalPrefs.setAvatar(null)
+        }
+    }
+
+    private fun persistImagePermission(uri: Uri) {
+        runCatching {
+            contentResolver.takePersistableUriPermission(
+                uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        }
     }
 
     /** Translation-overlay appearance: colour-mode pills + opacity slider.

@@ -13,6 +13,12 @@
     <string name="floating_icon_style_scale">Image scale: %1$d%%</string>
     <string name="floating_icon_style_reset">Reset</string>
     <string name="floating_icon_style_save">Save</string>
+    <string name="floating_icon_style_color_title">Default floating-ball color</string>
+    <string name="personal_images_title">Personal images</string>
+    <string name="personal_images_hint">Choose a home background and an avatar for the idle page.</string>
+    <string name="personal_background_choose">Background</string>
+    <string name="personal_avatar_choose">Avatar</string>
+    <string name="personal_images_clear">Restore defaults</string>
     <string name="overlay_box_section_title">Translation overlay</string>
     <string name="overlay_box_style_adaptive">Adaptive</string>
     <string name="overlay_box_style_dark">Dark</string>
