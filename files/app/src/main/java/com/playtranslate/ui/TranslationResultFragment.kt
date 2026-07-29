@@ -241,11 +241,6 @@ class TranslationResultFragment : Fragment() {
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        if (view != null) applyHomeAvatar()
-    }
-
     private fun applyHomeAvatar() {
         val uri = PersonalizationPrefs(requireContext()).avatarUri
         if (uri == null) {
@@ -1240,6 +1235,7 @@ class TranslationResultFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
+        if (view != null) applyHomeAvatar()
         // Deck membership can change while we're away (a card added here, in the
         // review sheet, or in AnkiDroid). Re-evaluate so badges aren't stuck on
         // the cached pre-add state.
