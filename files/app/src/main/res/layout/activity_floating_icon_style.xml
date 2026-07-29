@@ -109,7 +109,7 @@
                         android:textAllCaps="false"
                         android:textColor="?attr/ptAccent"
                         app:cornerRadius="24dp"
-                        app:icon="@drawable/ic_attach_file"
+                        app:icon="@drawable/ic_image_upload"
                         app:iconGravity="textStart"
                         app:iconTint="?attr/ptAccent"
                         app:strokeColor="?attr/ptAccent" />
