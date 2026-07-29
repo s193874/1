@@ -1,0 +1,33 @@
+name: Publish Soft UI APK
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - ".github/workflows/publish-soft-ui.yml"
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download verified APK artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p release
+          gh run download 30431842723 --repo "$GITHUB_REPOSITORY" --name PlayTranslate-QuickBubble-debug-apk --dir release
+          mv release/app-debug.apk release/PlayTranslate-SoftUI-v2.4.1-debug.apk
+
+      - name: Publish direct-download release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view soft-ui-v1 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload soft-ui-v1 release/PlayTranslate-SoftUI-v2.4.1-debug.apk --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create soft-ui-v1 release/PlayTranslate-SoftUI-v2.4.1-debug.apk --title "PlayTranslate Soft UI v1" --notes "柔光 UI 重设计测试版：新图标、主页、底栏、设置页与悬浮球外观页。" --latest --repo "$GITHUB_REPOSITORY"
+          fi
