@@ -5,7 +5,10 @@
     <string name="quick_action_bilingual">双语注释</string>
     <string name="floating_icon_style_title">悬浮球样式</string>
     <string name="floating_icon_style_preview">悬浮球预览</string>
+    <string name="floating_icon_style_hint">推荐使用透明背景的正方形图片，显示会更干净</string>
     <string name="floating_icon_style_choose">上传图片</string>
+    <string name="floating_icon_style_opacity_title">透明度</string>
+    <string name="floating_icon_style_scale_title">图片大小</string>
     <string name="floating_icon_style_opacity">透明度：%1$d%%</string>
     <string name="floating_icon_style_scale">图片大小：%1$d%%</string>
     <string name="floating_icon_style_reset">恢复默认</string>

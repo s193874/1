@@ -82,15 +82,15 @@ class FloatingOverlayIcon(context: Context) : View(context) {
     }
 
     // ── Normal mode paints ──────────────────────────────────────────────
-    private val defaultCircleColor = "#CC000000".toColorInt()
-    private val liveCircleColor = "#CC990000".toColorInt()
-    private val liveDegradedCircleColor = "#CC999900".toColorInt()
+    private val defaultCircleColor = "#D98A7BEF".toColorInt()
+    private val liveCircleColor = "#E6F184AD".toColorInt()
+    private val liveDegradedCircleColor = "#E6E7B85B".toColorInt()
     private val circlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = defaultCircleColor
         style = Paint.Style.FILL
     }
     private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = "#66888888".toColorInt()
+        color = "#80FFFFFF".toColorInt()
         style = Paint.Style.STROKE
         strokeWidth = 1.5f * resources.displayMetrics.density
     }
@@ -98,7 +98,7 @@ class FloatingOverlayIcon(context: Context) : View(context) {
      *  drives all three OLED subpixels at max (blue ages fastest), so a static
      *  white arrow is the icon's main burn-in risk; a light silver cuts emitted
      *  light ~25% with no perceptible change against the dark disc. */
-    private val arrowColor = "#C0C0C0".toColorInt()
+    private val arrowColor = "#FFFFFFFF".toColorInt()
     private val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = arrowColor
         // Stroked chevron, not a solid triangle: far fewer lit subpixels, and

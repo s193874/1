@@ -5,7 +5,10 @@
     <string name="quick_action_bilingual">Bilingual note</string>
     <string name="floating_icon_style_title">Floating ball style</string>
     <string name="floating_icon_style_preview">Floating ball preview</string>
+    <string name="floating_icon_style_hint">Use a square image with a transparent background for the cleanest result.</string>
     <string name="floating_icon_style_choose">Choose image</string>
+    <string name="floating_icon_style_opacity_title">Opacity</string>
+    <string name="floating_icon_style_scale_title">Image size</string>
     <string name="floating_icon_style_opacity">Opacity: %1$d%%</string>
     <string name="floating_icon_style_scale">Image scale: %1$d%%</string>
     <string name="floating_icon_style_reset">Reset</string>
